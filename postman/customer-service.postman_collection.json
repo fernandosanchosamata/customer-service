@@ -1,0 +1,251 @@
+{
+  "info": {
+    "_postman_id": "2c6e5b2f-1bb5-4d6b-9b53-customer-service",
+    "name": "NTT Bootcamp - Customer Service via API Gateway",
+    "description": "Collection para probar customer-service a traves de api-gateway. Ejecutar primero Auth / Login - Admin.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "customer_id",
+      "value": "69e984c3ea77252c2fd48d7c"
+    },
+    {
+      "key": "document_number",
+      "value": "12345678"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login - Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login exitoso', function () { pm.response.to.have.status(200); });",
+                  "const response = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', response.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/auth-service/auth/login",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "auth-service",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Create Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cliente creado', function () { pm.response.to.have.status(201); });",
+                  "const response = pm.response.json();",
+                  "if (response.id) pm.collectionVariables.set('customer_id', response.id);",
+                  "if (response.documentNumber) pm.collectionVariables.set('document_number', response.documentNumber);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"PERSONAL\",\n  \"profile\": \"REGULAR\",\n  \"documentType\": \"DNI\",\n  \"documentNumber\": \"{{document_number}}\",\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Perez\",\n  \"businessName\": null,\n  \"email\": \"juan.perez@example.com\",\n  \"phone\": \"999888777\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/customer-service/api/v1/customers",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "customer-service",
+                "api",
+                "v1",
+                "customers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer By Id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/customer-service/api/v1/customers/{{customer_id}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "customer-service",
+                "api",
+                "v1",
+                "customers",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/customer-service/api/v1/customers/{{customer_id}}/summary",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "customer-service",
+                "api",
+                "v1",
+                "customers",
+                "{{customer_id}}",
+                "summary"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer By Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/customer-service/api/v1/customers/document/{{document_number}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "customer-service",
+                "api",
+                "v1",
+                "customers",
+                "document",
+                "{{document_number}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Customer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"PERSONAL\",\n  \"profile\": \"VIP\",\n  \"documentType\": \"DNI\",\n  \"documentNumber\": \"{{document_number}}\",\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Perez Actualizado\",\n  \"businessName\": null,\n  \"email\": \"juan.actualizado@example.com\",\n  \"phone\": \"999888777\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/customer-service/api/v1/customers/{{customer_id}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "customer-service",
+                "api",
+                "v1",
+                "customers",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Customer",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/customer-service/api/v1/customers/{{customer_id}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "customer-service",
+                "api",
+                "v1",
+                "customers",
+                "{{customer_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

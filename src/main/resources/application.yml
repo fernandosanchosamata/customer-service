@@ -1,0 +1,28 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: customer-service
+  config:
+    import: "optional:configserver:http://localhost:8888"
+  cloud:
+    config:
+      enabled: false
+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/ntt_customer
+      auto-index-creation: true
+
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
