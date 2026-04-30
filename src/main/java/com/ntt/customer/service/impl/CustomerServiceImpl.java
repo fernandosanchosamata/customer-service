@@ -36,11 +36,16 @@ public class CustomerServiceImpl implements CustomerService {
 
   @Override
   public Single<CustomerResponse> createCustomer(CustomerRequest request) {
+    log.info(
+        "Iniciando creacion de cliente. type={}, profile={}",
+        request.getType(),
+        request.getProfile());
     return customerRepository
         .existsByDocumentNumber(request.getDocumentNumber())
         .flatMap(
             exists -> {
               if (Boolean.TRUE.equals(exists)) {
+                log.warn("Creacion de cliente rechazada por documento duplicado.");
                 return Single.error(
                     new IllegalArgumentException("El documento ya se encuentra registrado."));
               }
@@ -50,12 +55,14 @@ public class CustomerServiceImpl implements CustomerService {
 
               return customerRepository
                   .save(customer)
+                  .doOnSuccess(saved -> log.info("Cliente guardado. customerId={}", saved.getId()))
                   .flatMap(saved -> updateCacheAndPublishEvent(saved, true));
             });
   }
 
   @Override
   public Single<CustomerResponse> getCustomerById(String id) {
+    log.info("Consultando cliente. customerId={}", id);
     return customerRepository
         .findById(id)
         .switchIfEmpty(Single.error(new IllegalArgumentException("Cliente no encontrado.")))
@@ -64,8 +71,11 @@ public class CustomerServiceImpl implements CustomerService {
 
   @Override
   public Single<CustomerSummaryResponse> getCustomerSummaryById(String id) {
+    log.debug("Consultando resumen de cliente. customerId={}", id);
     return RxJava3Adapter.monoToMaybe(redisOperations.opsForValue().get(REDIS_PREFIX + id))
         .filter(this::hasCompleteCacheData)
+        .doOnSuccess(
+            cache -> log.debug("Resumen de cliente encontrado en Redis. customerId={}", id))
         .map(cacheDto -> buildSummaryFromCache(id, cacheDto))
         .switchIfEmpty(
             customerRepository
@@ -76,6 +86,7 @@ public class CustomerServiceImpl implements CustomerService {
 
   @Override
   public Single<CustomerResponse> getCustomerByDocument(String documentNumber) {
+    log.info("Consultando cliente por documento.");
     return customerRepository
         .findByDocumentNumber(documentNumber)
         .switchIfEmpty(Single.error(new IllegalArgumentException("Cliente no encontrado.")))
@@ -84,6 +95,7 @@ public class CustomerServiceImpl implements CustomerService {
 
   @Override
   public Single<CustomerResponse> updateCustomer(String id, CustomerRequest request) {
+    log.info("Iniciando actualizacion de cliente. customerId={}", id);
     return customerRepository
         .findById(id)
         .switchIfEmpty(Single.error(new IllegalArgumentException("Cliente no encontrado.")))
@@ -94,12 +106,17 @@ public class CustomerServiceImpl implements CustomerService {
 
               return customerRepository
                   .save(existing)
+                  .doOnSuccess(
+                      saved ->
+                          log.info(
+                              "Cliente guardado tras actualizacion. customerId={}", saved.getId()))
                   .flatMap(saved -> updateCacheAndPublishEvent(saved, false));
             });
   }
 
   @Override
   public Completable deleteCustomer(String id) {
+    log.info("Iniciando desactivacion de cliente. customerId={}", id);
     return customerRepository
         .findById(id)
         .switchIfEmpty(Single.error(new IllegalArgumentException("Cliente no encontrado.")))
@@ -110,6 +127,7 @@ public class CustomerServiceImpl implements CustomerService {
             })
         .flatMapCompletable(
             saved -> {
+              log.info("Cliente marcado como inactivo. customerId={}", saved.getId());
               // Adaptar la operacion Mono de Redis a Completable
               return RxJava3Adapter.monoToCompletable(
                   redisOperations.opsForValue().delete(REDIS_PREFIX + saved.getId()));
@@ -131,6 +149,7 @@ public class CustomerServiceImpl implements CustomerService {
         .map(
             success -> {
               if (isNew) {
+                log.info("Publicando evento de cliente creado. customerId={}", customer.getId());
                 kafkaTemplate.send(
                     KAFKA_TOPIC,
                     customer.getId(),
@@ -142,6 +161,8 @@ public class CustomerServiceImpl implements CustomerService {
                         .email(customer.getEmail())
                         .build());
               } else {
+                log.info(
+                    "Publicando evento de cliente actualizado. customerId={}", customer.getId());
                 kafkaTemplate.send(
                     KAFKA_TOPIC,
                     customer.getId(),
@@ -224,6 +245,8 @@ public class CustomerServiceImpl implements CustomerService {
 
     return RxJava3Adapter.monoToSingle(
             redisOperations.opsForValue().set(REDIS_PREFIX + customer.getId(), cacheDto))
+        .doOnSuccess(
+            success -> log.debug("Resumen de cliente cacheado. customerId={}", customer.getId()))
         .map(success -> buildSummary(customer));
   }
 
