@@ -41,6 +41,18 @@ class CustomerControllerTest {
   }
 
   @Test
+  void getCustomerByIdReturnsOkResponse() {
+    CustomerResponse response = customerResponse();
+    when(customerService.getCustomerById("customer-1")).thenReturn(Single.just(response));
+
+    var result = controller.getCustomerById("customer-1").blockingGet();
+
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(result.getBody()).isEqualTo(response);
+    verify(customerService).getCustomerById("customer-1");
+  }
+
+  @Test
   void getCustomerSummaryReturnsOkResponse() {
     CustomerSummaryResponse response =
         CustomerSummaryResponse.builder()
@@ -55,6 +67,31 @@ class CustomerControllerTest {
 
     assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(result.getBody()).isEqualTo(response);
+  }
+
+  @Test
+  void getCustomerByDocumentReturnsOkResponse() {
+    CustomerResponse response = customerResponse();
+    when(customerService.getCustomerByDocument("12345678")).thenReturn(Single.just(response));
+
+    var result = controller.getCustomerByDocument("12345678").blockingGet();
+
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(result.getBody()).isEqualTo(response);
+    verify(customerService).getCustomerByDocument("12345678");
+  }
+
+  @Test
+  void updateCustomerReturnsOkResponse() {
+    CustomerRequest request = customerRequest();
+    CustomerResponse response = customerResponse();
+    when(customerService.updateCustomer("customer-1", request)).thenReturn(Single.just(response));
+
+    var result = controller.updateCustomer("customer-1", request).blockingGet();
+
+    assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(result.getBody()).isEqualTo(response);
+    verify(customerService).updateCustomer("customer-1", request);
   }
 
   @Test

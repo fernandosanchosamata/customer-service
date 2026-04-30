@@ -1,6 +1,7 @@
 package com.ntt.customer.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -40,6 +41,112 @@ class CustomerServiceImplTest {
   @BeforeEach
   void setUp() {
     service = new CustomerServiceImpl(customerRepository, redisOperations, kafkaTemplate);
+  }
+
+  @Test
+  void getCustomerByIdReturnsCustomerResponse() {
+    when(customerRepository.findById("customer-1")).thenReturn(Maybe.just(activeCustomer()));
+
+    var response = service.getCustomerById("customer-1").blockingGet();
+
+    assertThat(response.getId()).isEqualTo("customer-1");
+    assertThat(response.getDocumentNumber()).isEqualTo("12345678");
+  }
+
+  @Test
+  void getCustomerByIdRejectsMissingCustomer() {
+    when(customerRepository.findById("missing")).thenReturn(Maybe.empty());
+
+    assertThatThrownBy(() -> service.getCustomerById("missing").blockingGet())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Cliente no encontrado.");
+  }
+
+  @Test
+  void getCustomerByDocumentReturnsCustomerResponse() {
+    when(customerRepository.findByDocumentNumber("12345678"))
+        .thenReturn(Maybe.just(activeCustomer()));
+
+    var response = service.getCustomerByDocument("12345678").blockingGet();
+
+    assertThat(response.getId()).isEqualTo("customer-1");
+  }
+
+  @Test
+  void updateCustomerPersistsCacheAndPublishesUpdatedEvent() {
+    CustomerRequest request = personalRequest();
+    request.setEmail("new@test.com");
+    request.setPhone("111222333");
+    when(customerRepository.findById("customer-1")).thenReturn(Maybe.just(activeCustomer()));
+    when(customerRepository.save(any(Customer.class)))
+        .thenAnswer(invocation -> Single.just(invocation.getArgument(0)));
+    when(redisOperations.opsForValue()).thenReturn(valueOperations);
+    when(valueOperations.set(eq("CUSTOMER_customer-1"), any(CustomerCacheDto.class)))
+        .thenReturn(Mono.just(true));
+
+    var response = service.updateCustomer("customer-1", request).blockingGet();
+
+    assertThat(response.getEmail()).isEqualTo("new@test.com");
+    assertThat(response.getPhone()).isEqualTo("111222333");
+    verify(kafkaTemplate).send(eq("customers-topic"), eq("customer-1"), any());
+  }
+
+  @Test
+  void deleteCustomerMarksCustomerInactiveAndDeletesCache() {
+    when(customerRepository.findById("customer-1")).thenReturn(Maybe.just(activeCustomer()));
+    when(customerRepository.save(any(Customer.class)))
+        .thenAnswer(invocation -> Single.just(invocation.getArgument(0)));
+    when(redisOperations.opsForValue()).thenReturn(valueOperations);
+    when(valueOperations.delete("CUSTOMER_customer-1")).thenReturn(Mono.just(true));
+
+    service.deleteCustomer("customer-1").blockingAwait();
+
+    verify(valueOperations).delete("CUSTOMER_customer-1");
+  }
+
+  @Test
+  void createCustomerRejectsPersonalCustomerWithoutNames() {
+    CustomerRequest request = personalRequest();
+    request.setFirstName(null);
+    when(customerRepository.existsByDocumentNumber("12345678")).thenReturn(Single.just(false));
+
+    assertThatThrownBy(() -> service.createCustomer(request).blockingGet())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Clientes personales deben tener Nombres y Apellidos.");
+    verify(customerRepository, never()).save(any());
+  }
+
+  @Test
+  void createCustomerRejectsPersonalCustomerWithPymeProfile() {
+    CustomerRequest request = personalRequest();
+    request.setProfile(CustomerProfile.PYME);
+    when(customerRepository.existsByDocumentNumber("12345678")).thenReturn(Single.just(false));
+
+    assertThatThrownBy(() -> service.createCustomer(request).blockingGet())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Un cliente PERSONAL no puede tener el perfil PYME.");
+  }
+
+  @Test
+  void createCustomerRejectsBusinessCustomerWithoutBusinessName() {
+    CustomerRequest request = businessRequest();
+    request.setBusinessName(null);
+    when(customerRepository.existsByDocumentNumber("12345678")).thenReturn(Single.just(false));
+
+    assertThatThrownBy(() -> service.createCustomer(request).blockingGet())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Clientes empresariales deben tener una Raz");
+  }
+
+  @Test
+  void createCustomerRejectsBusinessCustomerWithVipProfile() {
+    CustomerRequest request = businessRequest();
+    request.setProfile(CustomerProfile.VIP);
+    when(customerRepository.existsByDocumentNumber("12345678")).thenReturn(Single.just(false));
+
+    assertThatThrownBy(() -> service.createCustomer(request).blockingGet())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Un cliente EMPRESARIAL no puede tener el perfil VIP.");
   }
 
   @Test
@@ -120,6 +227,17 @@ class CustomerServiceImplTest {
     request.setFirstName("Ada");
     request.setLastName("Lovelace");
     request.setEmail("ada@test.com");
+    request.setPhone("999888777");
+    return request;
+  }
+
+  private CustomerRequest businessRequest() {
+    CustomerRequest request = new CustomerRequest();
+    request.setType(CustomerType.EMPRESARIAL);
+    request.setDocumentType(DocumentType.RUC);
+    request.setDocumentNumber("12345678");
+    request.setBusinessName("Acme SAC");
+    request.setEmail("contact@acme.test");
     request.setPhone("999888777");
     return request;
   }
